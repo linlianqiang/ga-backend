@@ -40,7 +40,21 @@ class BusinessApiTest {
 
  @Test void personnelValidationAndRename()throws Exception{mvc.perform(post("/api/personnel").header("Authorization","Bearer "+token).contentType("application/json").content("{\"name\":\"张三\",\"role\":\"组长\",\"phone\":\"bad\"}")).andExpect(jsonPath("$.code").value(400));mvc.perform(post("/api/personnel").header("Authorization","Bearer "+token).contentType("application/json").content("{\"name\":\"张三\",\"role\":\"组长\",\"phone\":\"13800000000\"}")).andExpect(jsonPath("$.code").value(200));mvc.perform(post("/api/personnel").header("Authorization","Bearer "+token).contentType("application/json").content("{\"name\":\"张三\",\"role\":\"组员\"}")).andExpect(jsonPath("$.code").value(409));}
  @Test void accountPasswordNeverReturnedAndCaseInsensitiveDuplicate()throws Exception{var r=new AccessRole();r.name="普通";r=roles.saveAndFlush(r);String body=json.writeValueAsString(Map.of("login","NewUser","name","新用户","role",r.id,"password","password123","enabled",true));mvc.perform(post("/api/accounts").header("Authorization","Bearer "+token).contentType("application/json").content(body)).andExpect(jsonPath("$.code").value(200)).andExpect(jsonPath("$.data.password").doesNotExist());mvc.perform(post("/api/accounts").header("Authorization","Bearer "+token).contentType("application/json").content(body.replace("NewUser","newuser"))).andExpect(jsonPath("$.code").value(409));assertTrue(users.findByUsername("NewUser").orElseThrow().getPassword().startsWith("$2"));}
- @Test void csvEscapesQuotesAndFormulaPrefix()throws Exception{var b=new Receivable();b.name="=公式";b.note="含\"引号";b=bills.saveAndFlush(b);var response=mvc.perform(get("/api/bills/export").header("Authorization","Bearer "+token)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);assertTrue(response.contains("\"'=公式\""));assertTrue(response.contains("\"含\"\"引号\""));}
+ @Test void xlsxPreservesQuotesAndStoresFormulaPrefixAsText() throws Exception {
+ var bill=new Receivable();bill.name="=公式";bill.note="含\"引号";bills.saveAndFlush(bill);
+ var response=mvc.perform(get("/api/bills/export").param("fields","name","note").header("Authorization","Bearer "+token))
+   .andExpect(status().isOk()).andExpect(content().contentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+   .andReturn().getResponse().getContentAsByteArray();
+ try(var workbook=new org.apache.poi.xssf.usermodel.XSSFWorkbook(new java.io.ByteArrayInputStream(response))) {
+  var sheet=workbook.getSheetAt(0);assertEquals(2,sheet.getLastRowNum());
+  assertTrue(sheet.getRow(2).getCell(0).getStringCellValue().startsWith("合计："));
+  var name=sheet.getRow(1).getCell(0);
+  assertEquals(org.apache.poi.ss.usermodel.CellType.STRING,name.getCellType());
+  assertEquals("=公式",name.getStringCellValue());
+  assertEquals("含\"引号",sheet.getRow(1).getCell(1).getStringCellValue());
+ }
+ }
+
 
  @Test void regionMaintenanceSynchronizesProjectAndProtectsDeletion() throws Exception {
  var p=new FireProject();p.setProjectName("地区测试");p.setRegion("泉州永春");p=projects.saveAndFlush(p);
@@ -54,8 +68,14 @@ class BusinessApiTest {
  @Test void ownerFilterIncludesSharedResponsibilitiesAndExport() throws Exception {
  for(String owner:List.of("庄耀铭","庄耀铭（主）王志强","其他人")){var b=new Receivable();b.name="负责人测试";b.owner=owner;bills.saveAndFlush(b);}
  mvc.perform(get("/api/bills").param("owner","庄耀铭").header("Authorization","Bearer "+token)).andExpect(jsonPath("$.data.total").value(2));
- var csv=mvc.perform(get("/api/bills/export").param("owner","庄耀铭").header("Authorization","Bearer "+token)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
- assertTrue(csv.contains("庄耀铭（主）王志强"));assertFalse(csv.contains("其他人"));
+ var response=mvc.perform(get("/api/bills/export").param("owner","庄耀铭").param("fields","owner").header("Authorization","Bearer "+token)).andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+ try(var workbook=new org.apache.poi.xssf.usermodel.XSSFWorkbook(new java.io.ByteArrayInputStream(response))) {
+  var sheet=workbook.getSheetAt(0);assertEquals(3,sheet.getLastRowNum());
+  assertTrue(sheet.getRow(3).getCell(0).getStringCellValue().startsWith("合计："));
+  var owners=new HashSet<String>();
+  for(int i=1;i<sheet.getLastRowNum();i++) owners.add(sheet.getRow(i).getCell(0).getStringCellValue());
+  assertEquals(Set.of("庄耀铭","庄耀铭（主）王志强"),owners);
+ }
  }
 
  @Test void personnelRolesAreFixedAndIndependentOfAccessRoles() throws Exception {
