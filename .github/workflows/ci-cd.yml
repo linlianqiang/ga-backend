@@ -1,0 +1,54 @@
+name: CI and deployment
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pipeline-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - run: mvn -B clean verify
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend
+          path: target/ga-backend-0.0.1-SNAPSHOT.jar
+          if-no-files-found: error
+  deploy:
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: backend
+      - name: Deploy over SSH
+        env:
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+          HOST: ${{ secrets.SSH_HOST }}
+          USER: ${{ secrets.SSH_USER }}
+          PORT: ${{ secrets.SSH_PORT }}
+        run: |
+          set -euo pipefail
+          : "${SSH_KEY:?}" "${KNOWN_HOSTS:?}" "${HOST:?}" "${USER:?}" "${PORT:?}"
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/*
+          trap 'rm -f ~/.ssh/id_ed25519' EXIT
+          scp -P "$PORT" -o BatchMode=yes ga-backend-0.0.1-SNAPSHOT.jar "$USER@$HOST:/www/wwwroot/java/ga-backend/incoming.jar"
+          ssh -p "$PORT" -o BatchMode=yes "$USER@$HOST" 'sudo /usr/local/sbin/deploy-ga-backend'

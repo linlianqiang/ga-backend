@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd /www/wwwroot/java/ga-backend
+exec 9>/var/lock/ga-backend-deploy.lock
+flock -n 9
+[ -s incoming.jar ]
+[ ! -f app.jar ] || cp -p app.jar previous.jar
+mv incoming.jar app.jar
+if systemctl restart ga-backend; then
+  for attempt in $(seq 1 60); do
+    if curl --fail --silent --max-time 2 http://127.0.0.1:8080/actuator/health > /dev/null; then exit 0; fi
+    sleep 2
+  done
+fi
+if [ -f previous.jar ]; then cp -p previous.jar app.jar; systemctl restart ga-backend; fi
+exit 1

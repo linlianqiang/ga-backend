@@ -1,0 +1,3 @@
+package com.example.gabackend.model;
+import jakarta.persistence.*;
+@Entity @Table(name="access_role",uniqueConstraints=@UniqueConstraint(columnNames={"name"})) public class AccessRole { @Id @GeneratedValue(strategy=GenerationType.IDENTITY) public Long id; @com.fasterxml.jackson.annotation.JsonProperty(access=com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY) public Boolean protectedRole=false; public String name; public String note; @ElementCollection(fetch=FetchType.EAGER) public java.util.Set<String> permissions=new java.util.HashSet<>(); }

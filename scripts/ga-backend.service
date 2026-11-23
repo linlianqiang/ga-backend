@@ -1,0 +1,13 @@
+[Unit]
+Description=GA Backend
+After=network.target
+[Service]
+User=ga-backend
+WorkingDirectory=/www/wwwroot/java/ga-backend
+EnvironmentFile=/etc/ga-backend.env
+ExecStart=/usr/bin/java -jar /www/wwwroot/java/ga-backend/app.jar
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+[Install]
+WantedBy=multi-user.target
