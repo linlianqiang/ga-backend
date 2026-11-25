@@ -1,5 +1,10 @@
 # CI/CD 部署
 
+正式 API 基础地址：`http://124.222.78.245:8080`。
+业务接口包含 `/api` 前缀，例如登录：`POST http://124.222.78.245:8080/api/auth/login`。
+前端若已在请求路径中包含 `/api`，baseURL 使用上述基础地址，避免重复拼接 `/api`。
+健康检查：`GET http://124.222.78.245:8080/actuator/health`；服务器发布脚本使用 `http://127.0.0.1:8080/actuator/health` 检查本机服务。
+
 PR 运行 Java 17 Maven 测试；main 推送或手动触发在测试成功后发布 production。发布串行执行，SSH 严格校验主机；健康检查失败恢复上一份 jar（不回滚数据库）。前端 /www/wwwroot/web 不在此仓库部署范围。
 
 ## 首次配置

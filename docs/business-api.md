@@ -1,5 +1,10 @@
 # 完整业务接口（不包含文件上传）
 
+正式 API 基础地址：`http://124.222.78.245:8080`。
+业务接口包含 `/api` 前缀，例如登录：`POST http://124.222.78.245:8080/api/auth/login`。
+前端若已在请求路径中包含 `/api`，baseURL 使用上述基础地址，避免重复拼接 `/api`。
+健康检查：`GET http://124.222.78.245:8080/actuator/health`；服务器发布脚本使用 `http://127.0.0.1:8080/actuator/health` 检查本机服务。
+
 所有资源除登录外需要 `Authorization: Bearer <token>`。返回 `{code,message,data}`；新增/修改业务校验失败仍可能是 HTTP 200 + code 400/409，前端同时检查 code。JWT认证失败 HTTP401，权限不足 HTTP403，格式错误 HTTP400。文件、合同附件上传/下载/删除不在本次范围。
 
 ## 启动
